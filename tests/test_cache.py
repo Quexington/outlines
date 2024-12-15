@@ -76,10 +76,10 @@ def test_get_cache(test_cache, use_async):
     maybe_await_coroutine(f(1))
     store_size = len(store)
 
-    maybe_await_coroutine(f(1))
+    assert maybe_await_coroutine(f(1)) == 1
     assert len(store) == store_size
 
-    maybe_await_coroutine(f(2))
+    assert maybe_await_coroutine(f(2)) == 2
     assert len(store) == store_size + 1
 
 

@@ -104,7 +104,7 @@ def cache(expire: Optional[float] = None, typed=False, ignore=()):
             if result is ENOVAL:
 
                 def callback(final_result):
-                    wrapper.__memory__.set(cache_key, result, expire, retry=True)
+                    wrapper.__memory__.set(cache_key, final_result, expire, retry=True)
                     return final_result
 
                 return cached_function(*args, **kwargs), callback
