@@ -94,45 +94,48 @@ def cache(expire: Optional[float] = None, typed=False, ignore=()):
 
         base = (full_name(cached_function),)
 
+        def wrapper(*args, **kwargs):
+            if not _caching_enabled:
+                return cached_function(*args, **kwargs), lambda res: res
+
+            cache_key = wrapper._outlines_cache_key(*args, **kwargs)
+            result = wrapper._outlines_cache_memory.get(
+                cache_key, default=ENOVAL, retry=True
+            )
+
+            if result is ENOVAL:
+
+                def callback(final_result):
+                    wrapper._outlines_cache_memory.set(
+                        cache_key, final_result, expire, retry=True
+                    )
+                    return final_result
+
+                return cached_function(*args, **kwargs), callback
+            else:
+                return result, lambda res: res
+
         if asyncio.iscoroutinefunction(cached_function):
 
-            async def wrapper(*args, **kwargs):
-                if not _caching_enabled:
-                    return await cached_function(*args, **kwargs)
-
-                cache_key = wrapper.__cache_key__(*args, **kwargs)
-                result = wrapper.__memory__.get(cache_key, default=ENOVAL, retry=True)
-
-                if result is ENOVAL:
-                    result = await cached_function(*args, **kwargs)
-                    wrapper.__memory__.set(cache_key, result, expire, retry=True)
-
-                return result
+            async def new_function(*args, **kwargs):
+                result, callback = wrapper(*args, **kwargs)
+                return callback(await result if asyncio.iscoroutine(result) else result)
 
         else:
 
-            def wrapper(*args, **kwargs):
-                if not _caching_enabled:
-                    return cached_function(*args, **kwargs)
+            def new_function(*args, **kwargs):
+                result, callback = wrapper(*args, **kwargs)
+                return callback(result)
 
-                cache_key = wrapper.__cache_key__(*args, **kwargs)
-                result = wrapper.__memory__.get(cache_key, default=ENOVAL, retry=True)
-
-                if result is ENOVAL:
-                    result = cached_function(*args, **kwargs)
-                    wrapper.__memory__.set(cache_key, result, expire, retry=True)
-
-                return result
-
-        def __cache_key__(*args, **kwargs):
+        def _outlines_cache_key(*args, **kwargs):
             """Make key for cache given function arguments."""
             return args_to_key(base, args, kwargs, typed, ignore)
 
-        wrapper.__cache_key__ = __cache_key__  # type: ignore
-        wrapper.__memory__ = memory  # type: ignore
-        wrapper.__wrapped__ = cached_function  # type: ignore
+        wrapper._outlines_cache_key = _outlines_cache_key  # type: ignore
+        wrapper._outlines_cache_memory = memory  # type: ignore
+        functools.wraps(cached_function)(new_function)
 
-        return wrapper
+        return new_function
 
     return decorator
 
